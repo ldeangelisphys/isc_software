@@ -68,6 +68,40 @@ def fill_n(string,n):
     num_digits = len(to_rep)
     
     return beg + '{num:0{ndigits}}'.format(num=n,ndigits=num_digits) + final
+
+def import_input_file(fin,sub_sample = False):
+    
+    input_ext = fin.split('.')[-1]
+    
+    if input_ext == 'mat':
+        
+        h5file = h5py.File(fin)
+        data_pointer = h5file['data']
+
+        data = data_pointer[:,:] # TODO might require a lot of memory
+        
+    elif input_ext == 'nii':
+        
+        img = nib.load(fin)            
+        data = img.get_fdata()
+        
+        vx,vy,vz, n_TRs = data.shape
+        n_voxels = np.prod([vx,vy,vz])
+        
+        data = data.reshape((n_voxels,n_TRs)).T # TODO double check that this transpose doesn't hurt
+        
+        # If you want to play with less data
+        if sub_sample == True:
+            
+            n_sampled_voxels = 100
+            r_indices = np.arange(n_sampled_voxels)
+#                r_indices = np.random.permutation(n_voxels)[:n_sampled_voxels]
+            v_indices = np.sort(r_indices)
+        
+            data = data[:,v_indices]
+    
+    return data
+    
 #%%
 ########## MAIN CODE ##########
 if __name__ == '__main__':
@@ -89,12 +123,15 @@ if __name__ == '__main__':
     #%%
     subjects = np.arange(N_subjects) + 1
     
+    file_list = []
     n_true = 0
+    
     for n in subjects:
+    
         fin = froot + fill_n(fld_example,n) + fill_n(input_fname,n)
-
-
+        
         if os.path.isfile(fin):
+            file_list.append(fin)
             n_true += 1
         else:
             print('Warning!!! No file found in %s' % fin)
@@ -103,32 +140,21 @@ if __name__ == '__main__':
 
 
 #%%
-    data = []
+    file_list = [file_list[0]]
     # for the first settings
 
-    for k,fld in enumerate(fld_participants):
+    for k,fin in enumerate(file_list):
 
-        if input_ext == 'mat':
-            
-            h5file = h5py.File(froot + fld + '/' + input_fname)
-            data_pointer = h5file['data']
+        # If it's the first I need to initialize the average
+        if k == 0:
+            average = import_input_file(fin)
+        else:
+            average += import_input_file(fin)
 
-            if k == 0:
-                n_TRs, n_voxels = data_pointer.shape
-                n_sampled_voxels = 100
-                r_indices = np.arange(n_sampled_voxels)
-#                r_indices = np.random.permutation(n_voxels)[:n_sampled_voxels]
-                v_indices = np.sort(r_indices)
-            
-            data_sample = data_pointer[:,v_indices]
-            
-            data.append(data_sample)
-            
-    data = np.array(data)
     #%%
     
     # Go fo simulated data
-    simdata = np.array(simulated_timeseries(n_subjects, n_TRs, n_voxels=n_sampled_voxels))
-    
+    simdata = np.array(simulated_timeseries(2, n_TRs=300, n_voxels=1000))
+    #%%    
     # Compute leave-one-out isc
     leave_one_out_isc(data,n_subjects,froot,n_sampled_voxels)
