@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import configparser, os, re
 import h5py
 from scipy.stats import zscore
+import nibabel as nib
 #%%
 # Create simple simulated data with high intersubject correlation
 def simulated_timeseries(n_subjects, n_TRs, n_voxels=1, noise=1):
@@ -59,6 +60,14 @@ def leave_one_out_isc(data,n_subjects,froot,n_voxels):
 
 
     return
+
+def fill_n(string,n):
+    
+    beg, temp = string.split('{')
+    to_rep, final = temp.split('}')
+    num_digits = len(to_rep)
+    
+    return beg + '{num:0{ndigits}}'.format(num=n,ndigits=num_digits) + final
 #%%
 ########## MAIN CODE ##########
 if __name__ == '__main__':
@@ -68,26 +77,35 @@ if __name__ == '__main__':
     ### IMPORT INPUT DATA ###
     config = configparser.ConfigParser()
     config.read('settings.ini')
-    fig_fmt = config['OUTPUT']['Figure format']    
+    fig_fmt = config['OUTPUT']['Figure format']
+    fig_dpi = config['OUTPUT']['Figure dpi']
     froot = config['INPUT']['Folder with input data']
-    fld_example = config['INPUT']['Folder name for first participant']
-    input_fname = config['INPUT']['4D scan data file name']
+    N_subjects = int(config['INPUT']['N participants'])
+    fld_example = config['INPUT']['Folder hierarchy']
+    input_fname = config['INPUT']['File name']
     input_ext = input_fname.split('.')[-1]
     
     # Set parameters for toy time series data
     #%%
-    folder_list = os.listdir(froot)
-    count = re.findall(r'\d+', fld_example)[-1]
-    l_count = len(count)
-    fld_root = fld_example[:-l_count]
-    fld_participants = [fld for fld in folder_list if fld.startswith(fld_root)]
-    n_subjects = len(fld_participants)
-    print('Ready to load data for {} participants'.format(n_subjects))
+    subjects = np.arange(N_subjects) + 1
+    
+    n_true = 0
+    for n in subjects:
+        fin = froot + fill_n(fld_example,n) + fill_n(input_fname,n)
 
+
+        if os.path.isfile(fin):
+            n_true += 1
+        else:
+            print('Warning!!! No file found in %s' % fin)
+            
+    print('Ready to load data for {} participants'.format(n_true))
+
+
+#%%
     data = []
     # for the first settings
 
-#%%
     for k,fld in enumerate(fld_participants):
 
         if input_ext == 'mat':
