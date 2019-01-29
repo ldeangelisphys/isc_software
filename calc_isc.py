@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import norm, pearsonr, zscore
-
-
+import configparser, os, re
+import h5py
+from scipy.stats import zscore
+#%%
 # Create simple simulated data with high intersubject correlation
 def simulated_timeseries(n_subjects, n_TRs, n_voxels=1, noise=1):
     signal = np.random.randn(n_TRs, n_voxels // 100)
@@ -13,23 +14,28 @@ def simulated_timeseries(n_subjects, n_TRs, n_voxels=1, noise=1):
     
     return data
 
-def plot_isc(c,fout):
+def plot_isc(c,participant,foutroot):
     """Given a 2D matrix c creates a 2D colormap from -1 to 1"""
 
-    plt.figure()
+    plt.figure(figsize = (5,4))
     plt.imshow(c, vmin = -1, vmax = 1, cmap = 'PRGn')
     plt.xlabel('# Voxels')
     plt.ylabel('# Voxels')
-    plt.title('Leave-one-out ISC')
+    plt.colorbar()
+    plt.title('Leave-one-out ISC // Participant {}'.format(participant))
+    fout = foutroot + 'c_{}.{}'.format(participant,fig_fmt)        
     plt.savefig(fout,dpi = 300,fmt=fig_fmt)
     plt.close('all')
     
     return
     
     
-def leave_one_out_isc(data,n_subjects,froot):
+def leave_one_out_isc(data,n_subjects,froot,n_voxels):
     
     data_average = np.average(data,axis = 0)
+    foutroot = froot + '/ISC/'
+    if not os.path.exists(foutroot):
+        os.makedirs(foutroot)
         
     for participant in range(2):
     
@@ -39,39 +45,72 @@ def leave_one_out_isc(data,n_subjects,froot):
         # Calculate the  correlation matrix
         c = np.corrcoef(data[participant],corr_average, rowvar = False)[n_voxels:,:n_voxels] # to select corr between part and av
         # And save it
-        fout = froot + 'c_{}.txt'.format(participant)
+        fout = foutroot + 'c_{}.txt'.format(participant)
         np.savetxt(fout,c)
 
         # Perform the Fisher z-transformation
         z = np.arctanh(c)
         # And save it
-        fout = froot + 'z_{}.txt'.format(participant)
+        fout = foutroot + 'z_{}.txt'.format(participant)
         np.savetxt(fout,z)
 
         # And save a plot as well
-        fout = froot + 'c_{}.{}'.format(participant,fig_fmt)        
-        plot_isc(c,fout)             
+        plot_isc(c,participant,foutroot)             
 
 
     return
-
-##### MAIN CODE ####
+#%%
+########## MAIN CODE ##########
 if __name__ == '__main__':
     
 
-    fig_fmt = 'png'    
-    froot = 'M:/data/'
+
     ### IMPORT INPUT DATA ###
-    
+    config = configparser.ConfigParser()
+    config.read('settings.ini')
+    fig_fmt = config['OUTPUT']['Figure format']    
+    froot = config['INPUT']['Folder with input data']
+    fld_example = config['INPUT']['Folder name for first participant']
+    input_fname = config['INPUT']['4D scan data file name']
+    input_ext = input_fname.split('.')[-1]
     
     # Set parameters for toy time series data
-    n_subjects = 20
-    n_TRs = 300
-    n_voxels = 1000
-    
+    #%%
+    folder_list = os.listdir(froot)
+    count = re.findall(r'\d+', fld_example)[-1]
+    l_count = len(count)
+    fld_root = fld_example[:-l_count]
+    fld_participants = [fld for fld in folder_list if fld.startswith(fld_root)]
+    n_subjects = len(fld_participants)
+    print('Ready to load data for {} participants'.format(n_subjects))
+
+    data = []
+    # for the first settings
+
+#%%
+    for k,fld in enumerate(fld_participants):
+
+        if input_ext == 'mat':
+            
+            h5file = h5py.File(froot + fld + '/' + input_fname)
+            data_pointer = h5file['data']
+
+            if k == 0:
+                n_TRs, n_voxels = data_pointer.shape
+                n_sampled_voxels = 100
+                r_indices = np.arange(n_sampled_voxels)
+#                r_indices = np.random.permutation(n_voxels)[:n_sampled_voxels]
+                v_indices = np.sort(r_indices)
+            
+            data_sample = data_pointer[:,v_indices]
+            
+            data.append(data_sample)
+            
+    data = np.array(data)
+    #%%
     
     # Go fo simulated data
-    data = np.array(simulated_timeseries(n_subjects, n_TRs, n_voxels=n_voxels))
+    simdata = np.array(simulated_timeseries(n_subjects, n_TRs, n_voxels=n_sampled_voxels))
     
     # Compute leave-one-out isc
-    leave_one_out_isc(data,n_subjects,froot)
+    leave_one_out_isc(data,n_subjects,froot,n_sampled_voxels)
