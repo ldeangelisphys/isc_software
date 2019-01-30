@@ -142,14 +142,8 @@ def single_leave_one_out_isc(PAR_IN):
 
     hdr,data = import_input_file(fin)
 
-
-    T_win = n_TRs
-    n_win = n_TRs - T_win + 1
-
     # Prepare one array for output
     corr_data = np.zeros((nx,ny,nz,n_win),dtype = float)
-
-
 
     # for every temporal window starting from t and t_win long
     for t in range(0,n_win):
@@ -166,12 +160,12 @@ def single_leave_one_out_isc(PAR_IN):
     del data
 
     # And save it as a nifti file
-    fout = foutroot + 'leaveoneout_c_S{:02}.nii'.format(s)
+    fout = foutroot + 'leaveoneout_c_S{:02}_{:04}T.nii'.format(s,n_win)
     img = nib.Nifti1Image(corr_data, np.eye(4), header = hdr)
     img.to_filename(fout)
 
     # Save also the Fisher z-transformation
-    fout = foutroot + 'leaveoneout_z_S{:02}.nii'.format(s)
+    fout = foutroot + 'leaveoneout_z_S{:02}_{:04}T.nii'.format(s,n_win)
     img = nib.Nifti1Image(np.arctanh(corr_data), np.eye(4), header = hdr)
     img.to_filename(fout)
 
@@ -198,6 +192,9 @@ if __name__ == '__main__':
     # Info on parallel processing
     parallelize = config['MULTIPROCESSING']['Parallelize']
     Nproc = int(config['MULTIPROCESSING']['Number of parallel processes'])
+    # Info on sliding window
+    sliding_window = config['TIME WINDOW']['Have a sliding window']
+    time_window = int(config['TIME WINDOW']['Length of time window [frames]'])
 
     # Prepare parameters for output
     subjects = np.arange(N_subjects) + 1
@@ -220,14 +217,26 @@ if __name__ == '__main__':
         data_average = compute_participant_average(subjects)
         
     nx,ny,nz, n_TRs = data_average.shape
-    
+
     avg_done = time.time()
     T_avg = avg_done - start
     print('Average computed in %d min and %d s' % (int(T_avg/60),int(np.mod(T_avg,60))))
-    
+
+
+
+
+    # Define parameters for sliding window
+    if sliding_window == 'True':
+        T_win = time_window
+        n_win = n_TRs - T_win + 1   
+    else:
+        T_win = n_TRs
+        n_win = n_TRs - T_win + 1           
+     
+ 
+
+  
     # Compute the leave one out isc
-
-
     if parallelize == 'True':
         
         file_list = make_file_list(subjects)        
