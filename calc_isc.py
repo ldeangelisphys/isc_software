@@ -2,8 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import configparser, os, re
 import h5py
-from scipy.stats import zscore
+from scipy.stats import zscore,pearsonr
 import nibabel as nib
+import time
 #%%
 # Create simple simulated data with high intersubject correlation
 def simulated_timeseries(n_subjects, n_TRs, n_voxels=1, noise=1):
@@ -29,37 +30,6 @@ def plot_isc(c,participant,foutroot):
     plt.close('all')
     
     return
-    
-    
-def leave_one_out_isc(data,n_subjects,froot,n_voxels):
-    
-    data_average = np.average(data,axis = 0)
-    foutroot = froot + '/ISC/'
-    if not os.path.exists(foutroot):
-        os.makedirs(foutroot)
-        
-    for participant in range(2):
-    
-        # I exclude the participant from the total average
-        corr_average = data_average - data[participant] / (1.0 * n_subjects)
-        
-        # Calculate the  correlation matrix
-        c = np.corrcoef(data[participant],corr_average, rowvar = False)[n_voxels:,:n_voxels] # to select corr between part and av
-        # And save it
-        fout = foutroot + 'c_{}.txt'.format(participant)
-        np.savetxt(fout,c)
-
-        # Perform the Fisher z-transformation
-        z = np.arctanh(c)
-        # And save it
-        fout = foutroot + 'z_{}.txt'.format(participant)
-        np.savetxt(fout,z)
-
-        # And save a plot as well
-        plot_isc(c,participant,foutroot)             
-
-
-    return
 
 def fill_n(string,n):
     
@@ -68,6 +38,26 @@ def fill_n(string,n):
     num_digits = len(to_rep)
     
     return beg + '{num:0{ndigits}}'.format(num=n,ndigits=num_digits) + final
+
+def make_file_list(subjects):
+    
+    file_list = []
+    n_true = 0
+    
+    for n in subjects:
+    
+        fin = froot + fill_n(fld_example,n) + fill_n(input_fname,n)
+        
+        if os.path.isfile(fin):
+            file_list.append(fin)
+            n_true += 1
+        else:
+            print('Warning!!! No file found in %s' % fin)
+            
+    print('Ready to load data for {} participants'.format(n_true))
+    
+    return file_list
+
 
 def import_input_file(fin,sub_sample = False):
     
@@ -84,11 +74,12 @@ def import_input_file(fin,sub_sample = False):
         
         img = nib.load(fin)            
         data = img.get_fdata()
+        hdr = img.header     
         
-        vx,vy,vz, n_TRs = data.shape
-        n_voxels = np.prod([vx,vy,vz])
+        nx,ny,nz, n_TRs = data.shape
+        n_voxels = np.prod([nx,ny,nz])
         
-        data = data.reshape((n_voxels,n_TRs)).T # TODO double check that this transpose doesn't hurt
+        # data = data.reshape((n_voxels,n_TRs)).T # TODO double check that this transpose doesn't hurt
         
         # If you want to play with less data
         if sub_sample == True:
@@ -100,7 +91,73 @@ def import_input_file(fin,sub_sample = False):
         
             data = data[:,v_indices]
     
-    return data
+    return hdr,data
+
+def compute_participant_average(subjects):
+
+    file_list = make_file_list(subjects)
+    n_files = len(file_list)
+
+    for k,fin in enumerate(file_list):
+
+        # If it's the first I need to initialize the average
+        if k == 0:
+            hdr,average = import_input_file(fin)
+        else:
+            average += import_input_file(fin)[1]
+            
+        print('Averaging... %d out of %d' % (k +1, n_files))
+
+    average = average / float(n_files)
+
+    fout = foutroot + 'subjects_average.nii'
+    img = nib.Nifti1Image(average, np.eye(4), header = hdr)
+    img.to_filename(fout)
+
+    
+    return average
+
+
+def leave_one_out_isc(subjects):
+    
+
+    n_subjects = len(subjects)
+    file_list = make_file_list(subjects)
+
+    # loop trough every subject
+    for s,fin in zip(subjects,file_list): 
+
+        print('Computing ISC for participant %d / %d' % (s, n_subjects))
+
+        hdr,data = import_input_file(fin)
+       
+        # Prepare one array for output
+        corr_data = np.zeros((nx,ny,nz),dtype = float)
+                
+        # Calculate the  correlation for every voxel
+        for vx in range(nx):
+            for vy in range(ny):
+                for vz in range(nz):
+                    corr_data[vx,vy,vz] = pearsonr(data_average[vx,vy,vz,:] - ( data[vx,vy,vz,:] / (1.0 * n_subjects) ),
+                                                     data[vx,vy,vz,:])[0]
+        
+        # after correlating we can free the memory from the data
+        del data
+        
+        # And save it as a nifti file
+        fout = foutroot + 'leaveoneout_c_S{:02}.nii'.format(s)
+        img = nib.Nifti1Image(corr_data, np.eye(4), header = hdr)
+        img.to_filename(fout)
+        
+        # Save also the Fisher z-transformation
+        fout = foutroot + 'leaveoneout_z_S{:02}.nii'.format(s)
+        img = nib.Nifti1Image(np.arctanh(corr_data), np.eye(4), header = hdr)
+        img.to_filename(fout)
+
+
+
+    return
+
     
 #%%
 ########## MAIN CODE ##########
@@ -118,43 +175,37 @@ if __name__ == '__main__':
     fld_example = config['INPUT']['Folder hierarchy']
     input_fname = config['INPUT']['File name']
     input_ext = input_fname.split('.')[-1]
-    
-    # Set parameters for toy time series data
-    #%%
+ 
+    # Prepare parameters for output
     subjects = np.arange(N_subjects) + 1
-    
-    file_list = []
-    n_true = 0
-    
-    for n in subjects:
-    
-        fin = froot + fill_n(fld_example,n) + fill_n(input_fname,n)
+
+    foutroot = froot + 'ISC_%02d-%02d/' % (subjects[0],subjects[-1])
+    if not os.path.exists(foutroot):
+        os.makedirs(foutroot)
         
-        if os.path.isfile(fin):
-            file_list.append(fin)
-            n_true += 1
-        else:
-            print('Warning!!! No file found in %s' % fin)
-            
-    print('Ready to load data for {} participants'.format(n_true))
-
-
-#%%
-    file_list = [file_list[0]]
-    # for the first settings
-
-    for k,fin in enumerate(file_list):
-
-        # If it's the first I need to initialize the average
-        if k == 0:
-            average = import_input_file(fin)
-        else:
-            average += import_input_file(fin)
-
-    #%%
+        
+    # Load the average among participants or compute it
+    start = time.time()
     
-    # Go fo simulated data
-    simdata = np.array(simulated_timeseries(2, n_TRs=300, n_voxels=1000))
-    #%%    
-    # Compute leave-one-out isc
-    leave_one_out_isc(data,n_subjects,froot,n_sampled_voxels)
+    try:
+        img = nib.load(foutroot + 'subjects_average.nii')
+        print('Loading data average from %ssubjects_average.nii' % foutroot)
+        data_average = img.get_fdata()
+    except:
+        print('No file with average data found. Computing the average now.')
+        data_average = compute_participant_average(subjects)
+        
+    nx,ny,nz, n_TRs = data_average.shape
+    
+    avg_done = time.time()
+    T_avg = avg_done - start
+    print('Average computed in %d min and %d s' % (int(T_avg/60),int(np.mod(T_avg,60))))
+    
+    # Compute the leave one out isc
+    leave_one_out_isc(subjects)
+    
+    isc_done = time.time()
+    T_isc = isc_done - avg_done
+    print('ISC computed in %d min and %d s' % (int(T_isc/60),int(np.mod(T_isc,60))))
+    
+    # byeee
