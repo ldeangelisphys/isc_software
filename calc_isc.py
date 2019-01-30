@@ -185,9 +185,9 @@ if __name__ == '__main__':
     fld_example = config['INPUT']['Folder hierarchy']
     input_fname = config['INPUT']['File name']
     input_ext = input_fname.split('.')[-1]
- 
-    Nproc = 2
-    parallelize = True
+    # Info on parallel processing
+    parallelize = config['MULTIPROCESSING']['Parallelize']
+    Nproc = int(config['MULTIPROCESSING']['Number of parallel processes'])
 
     # Prepare parameters for output
     subjects = np.arange(N_subjects) + 1
@@ -218,7 +218,7 @@ if __name__ == '__main__':
     # Compute the leave one out isc
 
 
-    if parallelize == True:
+    if parallelize == 'True':
         
         file_list = make_file_list(subjects)        
         p = Pool(Nproc)
