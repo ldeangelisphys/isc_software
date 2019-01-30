@@ -142,15 +142,25 @@ def single_leave_one_out_isc(PAR_IN):
 
     hdr,data = import_input_file(fin)
 
-    # Prepare one array for output
-    corr_data = np.zeros((nx,ny,nz),dtype = float)
 
-    # Calculate the  correlation for every voxel
-    for vx in range(nx):
-        for vy in range(ny):
-            for vz in range(nz):
-                corr_data[vx,vy,vz] = pearsonr(data_average[vx,vy,vz,:] - ( data[vx,vy,vz,:] / (1.0 * n_subjects) ),
-                                                 data[vx,vy,vz,:])[0]
+    T_win = n_TRs
+    n_win = n_TRs - T_win + 1
+
+    # Prepare one array for output
+    corr_data = np.zeros((nx,ny,nz,n_win),dtype = float)
+
+
+
+    # for every temporal window starting from t and t_win long
+    for t in range(0,n_win):
+        # Calculate the  correlation for every voxel
+        for vx in range(nx):
+            for vy in range(ny):
+                for vz in range(nz):
+                    corr_data[vx,vy,vz,t] = pearsonr(data_average[vx,vy,vz,t:t+T_win] -
+                                                     ( data[vx,vy,vz,t:t+T_win] /
+                                                     (1.0 * n_subjects) ),
+                                                   data[vx,vy,vz,t:t+T_win])[0]
 
     # after correlating we can free the memory from the data
     del data
