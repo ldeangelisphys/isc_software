@@ -34,8 +34,9 @@ Inside the main folder, there could be a structure of subfolders, for example in
 associated with each different subject to be analyzed. This structure can be specified as the Folder hierarchy,
 where the symbol {XX} can be inserted whenever a number associated with the different subjects occurs.
 The number of X here represent the number of digits used to represent the integer of each subject. For example,
-for a structure like fld_S01/preprocessed/, fld_S02/preprocessed/, ..., we will use {XX}, wherease for
-fld_S001/preprocessed/, fld_S002/preprocessed/, ..., we would use {XXX}.
+for a structure like fld_S01/preprocessed/, fld_S02/preprocessed/, ..., we will use {XX}, whereas for
+fld_S001/preprocessed/, fld_S002/preprocessed/, ..., we would use {XXX}. If all the files are in the folder with input
+data specified before, this field can be left blank or set to '/'.
 
 > N participants = 2
 
