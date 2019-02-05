@@ -77,6 +77,7 @@ def import_input_file(fin,sub_sample = False):
         img = nib.load(fin)            
         data = img.get_fdata()
         hdr = img.header     
+        aff = img.affine
         
         nx,ny,nz, n_TRs = data.shape
         n_voxels = np.prod([nx,ny,nz])
@@ -93,7 +94,7 @@ def import_input_file(fin,sub_sample = False):
         
             data = data[:,v_indices]
     
-    return hdr,data
+    return hdr,aff,data
 
 def compute_participant_average(subjects):
 
@@ -104,16 +105,16 @@ def compute_participant_average(subjects):
 
         # If it's the first I need to initialize the average
         if k == 0:
-            hdr,average = import_input_file(fin)
+            hdr,aff,average = import_input_file(fin)
         else:
-            average += import_input_file(fin)[1]
+            average += import_input_file(fin)[-1]
             
         print('Averaging... %d out of %d' % (k +1, n_files))
 
     average = average / float(n_files)
 
     fout = foutroot + 'subjects_average.nii'
-    img = nib.Nifti1Image(average, np.eye(4), header = hdr)
+    img = nib.Nifti1Image(average, aff, header = hdr)
     img.to_filename(fout)
 
     
@@ -131,7 +132,7 @@ def leave_one_out_isc(subjects):
 
         print('Computing ISC for participant %d / %d' % (s, n_subjects))
 
-        hdr,data = import_input_file(fin)
+        hdr,aff,data = import_input_file(fin)
        
         # Prepare one array for output
         corr_data = np.zeros((nx,ny,nz),dtype = float)
@@ -154,12 +155,12 @@ def leave_one_out_isc(subjects):
         
         # And save it as a nifti file
         fout = foutroot + 'leaveoneout_c_S{:02}.nii'.format(s)
-        img = nib.Nifti1Image(corr_data, np.eye(4), header = hdr)
-        img.to_filename(fout)
+        img = nib.Nifti1Image(corr_data, aff, header = hdr)
+        nib.save(img,fout)
         
         # Save also the Fisher z-transformation
         fout = foutroot + 'leaveoneout_z_S{:02}.nii'.format(s)
-        img = nib.Nifti1Image(np.arctanh(corr_data), np.eye(4), header = hdr)
+        img = nib.Nifti1Image(np.arctanh(corr_data), aff, header = hdr)
         img.to_filename(fout)
 
 
@@ -176,8 +177,6 @@ if __name__ == '__main__':
     ### IMPORT INPUT DATA ###
     config = configparser.ConfigParser()
     config.read('settings.ini')
-    fig_fmt = config['OUTPUT']['Figure format']
-    fig_dpi = config['OUTPUT']['Figure dpi']
     froot = config['INPUT']['Folder with input data']
     N_subjects = int(config['INPUT']['N participants'])
     fld_example = config['INPUT']['Folder hierarchy']
