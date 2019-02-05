@@ -140,9 +140,15 @@ def leave_one_out_isc(subjects):
         for vx in range(nx):
             for vy in range(ny):
                 for vz in range(nz):
-                    corr_data[vx,vy,vz] = pearsonr(data_average[vx,vy,vz,:] - ( data[vx,vy,vz,:] / (1.0 * n_subjects) ),
-                                                     data[vx,vy,vz,:])[0]
-        
+                    # if there is some variation in the data
+                    if np.diff(data[vx,vy,vz,:]).any() != 0:
+                        # Compute the correlation coefficient
+                        corr_data[vx,vy,vz] = pearsonr(data_average[vx,vy,vz,:] - ( data[vx,vy,vz,:] / (1.0 * n_subjects) ),
+                                                         data[vx,vy,vz,:])[0]
+                    else: # Otherwise set it to zero
+                        corr_data[vx,vy,vz] = 0
+                    
+    
         # after correlating we can free the memory from the data
         del data
         
