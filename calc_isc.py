@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import configparser, os, re
-import h5py
 from scipy.stats import zscore,pearsonr
 import nibabel as nib
 import time
@@ -65,10 +64,7 @@ def import_input_file(fin,sub_sample = False):
     
     if input_ext == 'mat':
         
-        h5file = h5py.File(fin)
-        data_pointer = h5file['data']
-
-        data = data_pointer[:,:] # TODO might require a lot of memory
+        print('Please input ,nii files.')
         
     elif input_ext == 'nii':
         
