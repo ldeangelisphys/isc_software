@@ -32,11 +32,17 @@ def plot_isc(c,participant,foutroot):
 
 def fill_n(string,n):
     
-    beg, temp = string.split('{')
-    to_rep, final = temp.split('}')
-    num_digits = len(to_rep)
-    
-    return beg + '{num:0{ndigits}}'.format(num=n,ndigits=num_digits) + final
+    try:
+        beg, temp = string.split('{')
+        to_rep, final = temp.split('}')
+        num_digits = len(to_rep)
+
+        result = beg + '{num:0{ndigits}}'.format(num=n,ndigits=num_digits) + final
+        
+    except:
+        result = string
+        
+    return result
 
 def make_file_list(subjects):
     
