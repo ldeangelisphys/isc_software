@@ -5,6 +5,8 @@
 % make sure all the 4D files are in the same image space and have the same
 % number of time-points or you'll get an error
 
+% script written by Christian Keysers
+
 inDir='/Users/christiankeysers/Dropbox (Social Brain Lab)/idisk/CurrentManuscripts/ISCtoolsoftrade/LorenzoPy/ExampleData/InputData'; %set this to where all your 4D files are
 outDir='/Users/christiankeysers/Dropbox (Social Brain Lab)/idisk/CurrentManuscripts/ISCtoolsoftrade/LorenzoPy/ExampleData/OutputData'; %create that directory before running the script
 conditions=dir(strcat([inDir,'/','swa*.nii'])); %swa*.nii is the searchstring for your 4D files.
@@ -26,13 +28,19 @@ end
 
 %% saves the sum for future use
 save_nii(sum,strcat([outDir '/' 'sum.nii']));
-sd=std(sum.img,[],4)
+sd=std(sum.img,[],4);
 
 %% gets the sizes of the 4D files to step through all the voxels
 [x,y,z,t]=size(sum.img);
 %% calculate for each image, the correlation with others and the fisher-z-transformed maps and saves into outDir
+% this script uses a simple trick: the average of other participants is not
+% recalculated using all other participants, but simply as the sum - this
+% particular participant. This allows the process to only need the sum and
+% a particular participants 4D file to be open simultaneously
 rho=load_nii(strcat(conditions(1).folder,'/',conditions(1).name),1); % to make sure that the correlation images have the same header as the input images, I load the first volume of an image into rho, then zero the values in the .img
+f = waitbar(0,'Please wait...');
 for subj=1:n
+    waitbar(subj/n,f,strcat(['starting to process subject ',num2str(subj,'%02.f')]));
     tmp=load_nii(strcat(conditions(subj).folder,'/',conditions(subj).name));
     rho.img=NaN(x,y,z);
 

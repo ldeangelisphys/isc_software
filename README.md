@@ -1,9 +1,12 @@
 # ISC Analysis README
 ## Intro
 
-This is a Python script to calculate Inter Subject Correlation starting from 4D nifti files from fMRI.
+This is a software to calculate Inter Subject Correlation starting from 4D nifti files from fMRI.
 
-The correct running of the code requires python 3.X. To use on windows machines
+There are two versions available: a python script and a matlab version.
+
+## Python script
+The correct running of the python code requires python 3.X. To use on windows machines
 we suggest installing anaconda. You also need to install the nibabel library, which is not 
 by default in the anaconda distribution. To do so you can open the anaconda prompt and
 type
@@ -11,7 +14,7 @@ type
 > pip install nibabel
 
 
-## Running the software
+### Running the software
 Once installed python, you can run the software by opening the anaconda prompt,
 navigating to the location of the softare (cd /path/to/software) and by typing
 
@@ -20,7 +23,7 @@ navigating to the location of the softare (cd /path/to/software) and by typing
 In order to run correctly, the software needs a number of options to be
 given by the user. To do so, we provide a settings file called settings.ini
 
-## Setting File
+### Setting File
 In the file settings.ini the user can provide all the useful information about the input files that
 need to be analyzed. These include the location of the input files.
 
@@ -48,10 +51,16 @@ expects to find data starting from subject 1 to subject N participants.
 The name of the files with their extension should also be given to the software. Again, the symbol
 {XX} can be used to replace the number associated to each subject, as in the folder hierarchy.
 
-## Output
+### Output
 
 The software creates a folder where to store the generated output. This is created inside the folder with
 input data given at the input and named ISC_XX-YY, where XX and YY are the first and last subject that
 took part in the calculation. Inside this folder, the software saves one two .nii files for
 each subject, one containing the leave-one-out ISC correlation and one its Z-Fisher transformation.
 The software also stores the average signal of all the participants in this folder.
+
+## Matlab script
+
+In this case, everything is contained in the .m file contained in the repository.
+Once opened the script with matlab, the parameters corresponding to the location of the
+files can be changed in the script itself.
