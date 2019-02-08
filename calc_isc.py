@@ -4,7 +4,8 @@ import configparser, os, re
 from scipy.stats import zscore,pearsonr
 import nibabel as nib
 import time
-#%%
+from multiprocessing import Pool
+
 # Create simple simulated data with high intersubject correlation
 def simulated_timeseries(n_subjects, n_TRs, n_voxels=1, noise=1):
     signal = np.random.randn(n_TRs, n_voxels // 100)
@@ -130,42 +131,54 @@ def leave_one_out_isc(subjects):
     # loop trough every subject
     for s,fin in zip(subjects,file_list): 
 
-        print('Computing ISC for participant %d / %d' % (s, n_subjects))
+        single_leave_one_out_isc([s,fin])
 
-        hdr,aff,data = import_input_file(fin)
-       
-        # Prepare one array for output
-        corr_data = np.zeros((nx,ny,nz),dtype = float)
-                
+    return
+
+def single_leave_one_out_isc(PAR_IN):
+    """Given PAR_IN (a list with subject number and input file
+    Computes the leave one out correlation with the average."""
+
+    [s,fin] = PAR_IN
+    
+    print('Computing ISC for participant %d / %d' % (s, n_subjects))
+
+    hdr,aff,data = import_input_file(fin)
+
+    # Prepare one array for output
+    corr_data = np.zeros((nx,ny,nz,n_win),dtype = float)
+    # for every temporal window starting from t and t_win long
+    for t in range(0,n_win):
         # Calculate the  correlation for every voxel
         for vx in range(nx):
             for vy in range(ny):
                 for vz in range(nz):
                     # if there is some variation in the data
-                    if np.diff(data[vx,vy,vz,:]).any() != 0:
+                    if np.diff(data[vx,vy,vz,t:t+T_win]).any() != 0:
                         # Compute the correlation coefficient
-                        corr_data[vx,vy,vz] = pearsonr(data_average[vx,vy,vz,:] - ( data[vx,vy,vz,:] / (1.0 * n_subjects) ),
-                                                         data[vx,vy,vz,:])[0]
+                        corr_data[vx,vy,vz,t] = pearsonr(data_average[vx,vy,vz,t:t+T_win] -
+                                                         ( data[vx,vy,vz,t:t+T_win] /
+                                                           (1.0 * n_subjects) ),
+                                                         data[vx,vy,vz,t:t+T_win])[0]
                     else: # Otherwise set it to zero
-                        corr_data[vx,vy,vz] = 0
-                    
-    
-        # after correlating we can free the memory from the data
-        del data
-        
-        # And save it as a nifti file
-        fout = foutroot + 'leaveoneout_c_S{:02}.nii'.format(s)
-        img = nib.Nifti1Image(corr_data, aff, header = hdr)
-        nib.save(img,fout)
-        
-        # Save also the Fisher z-transformation
-        fout = foutroot + 'leaveoneout_z_S{:02}.nii'.format(s)
-        img = nib.Nifti1Image(np.arctanh(corr_data), aff, header = hdr)
-        img.to_filename(fout)
+                        corr_data[vx,vy,vz,t] = 0
 
 
+    # after correlating we can free the memory from the data
+    del data
+
+    # And save it as a nifti file
+    fout = foutroot + 'leaveoneout_c_S{:02}_{:04}T.nii'.format(s,n_win)
+    img = nib.Nifti1Image(corr_data, aff, header = hdr)
+    img.to_filename(fout)
+
+    # Save also the Fisher z-transformation
+    fout = foutroot + 'leaveoneout_z_S{:02}_{:04}T.nii'.format(s,n_win)
+    img = nib.Nifti1Image(np.arctanh(corr_data), aff, header = hdr)
+    img.to_filename(fout)
 
     return
+    
 
     
 #%%
@@ -182,9 +195,16 @@ if __name__ == '__main__':
     fld_example = config['INPUT']['Folder hierarchy']
     input_fname = config['INPUT']['File name']
     input_ext = input_fname.split('.')[-1]
- 
+    # Info on parallel processing
+    parallelize = config['MULTIPROCESSING']['Parallelize']
+    Nproc = int(config['MULTIPROCESSING']['Number of parallel processes'])
+    # Info on sliding window
+    sliding_window = config['TIME WINDOW']['Have a sliding window']
+    time_window = int(config['TIME WINDOW']['Length of time window [frames]'])
+
     # Prepare parameters for output
     subjects = np.arange(N_subjects) + 1
+    n_subjects = len(subjects)
 
     foutroot = froot + 'ISC_%02d-%02d/' % (subjects[0],subjects[-1])
     if not os.path.exists(foutroot):
@@ -203,15 +223,40 @@ if __name__ == '__main__':
         data_average = compute_participant_average(subjects)
         
     nx,ny,nz, n_TRs = data_average.shape
-    
+
     avg_done = time.time()
     T_avg = avg_done - start
     print('Average computed in %d min and %d s' % (int(T_avg/60),int(np.mod(T_avg,60))))
-    
+
+
+
+
+    # Define parameters for sliding window
+    if sliding_window == 'True':
+        T_win = time_window
+        n_win = n_TRs - T_win + 1   
+    else:
+        T_win = n_TRs
+        n_win = n_TRs - T_win + 1           
+     
+ 
+
+  
     # Compute the leave one out isc
-    leave_one_out_isc(subjects)
+    if parallelize == 'True':
+        
+        file_list = make_file_list(subjects)        
+        p = Pool(Nproc)
+        
+        par_list = [s_fin for s_fin in zip(subjects,file_list)]
+        p.map(single_leave_one_out_isc,par_list)
+
+    else:
+
+        leave_one_out_isc(subjects)
     
     isc_done = time.time()
+
     T_isc = isc_done - avg_done
     print('ISC computed in %d min and %d s' % (int(T_isc/60),int(np.mod(T_isc,60))))
     
